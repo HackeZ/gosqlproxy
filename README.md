@@ -8,7 +8,9 @@ GoSQLProxy is a simply proxy of MySQL route write/read request to master/slaves 
 
 running go get command download package to `$GOPATH`.
 
-> go get github.com/hackez/gosqlproxy
+```shell
+go get github.com/hackez/gosqlproxy
+```
 
 ### Running GoSQLProxy
 
