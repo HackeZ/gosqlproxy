@@ -11,7 +11,7 @@ type TxHandler struct {
 
 // NewTx new transation in master databases
 func (p *Proxy) NewTx() (*TxHandler, error) {
-	tx, err := p.Master.Begin()
+	tx, err := p.GetMaster().Begin()
 	if err != nil {
 		return nil, err
 	}

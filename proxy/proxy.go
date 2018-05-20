@@ -3,12 +3,12 @@ package proxy
 import (
 	"database/sql"
 	"fmt"
-	"sort"
 	"sync"
 	"time"
 
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/hackez/gosqlproxy/conf"
+	"github.com/hackez/weight"
 )
 
 const (
@@ -16,14 +16,10 @@ const (
 	defaultPoolSize    = 100
 )
 
-type Slave struct {
-	db     *sql.DB
-	weight int32
-}
-
+// Proxy route write/read request to different instance database
 type Proxy struct {
-	Master *sql.DB
-	Slaves []*Slave // sort by weight from highest to lowest
+	master *sql.DB
+	slave  weight.Weight
 
 	mtx *sync.Mutex
 }
@@ -36,7 +32,7 @@ func New(conf conf.Config) (pxy *Proxy, err error) {
 	if err != nil {
 		return nil, err
 	}
-	pxy.Master = master
+	pxy.master = master
 
 	defer func() {
 		if err != nil {
@@ -44,25 +40,23 @@ func New(conf conf.Config) (pxy *Proxy, err error) {
 		}
 	}()
 
-	if conf.SchemaSlaves == nil || len(conf.SchemaSlaves) == 0 { // no available slaves databases
-		pxy.Slaves = []*Slave{&Slave{master, 0}}
+	// no available slaves databases
+	if conf.SchemaSlaves == nil || len(conf.SchemaSlaves) == 0 {
 		return pxy, nil
 	}
 
+	pxy.slave = &weight.SW{} // use smooth round-robin weight
 	for _, slave := range conf.SchemaSlaves {
 		db, err := openDB("mysql", slave)
 		if err != nil {
 			return nil, err
 		}
 
-		pxy.Slaves = append(pxy.Slaves, &Slave{
-			db:     db,
-			weight: slave.Weight,
-		})
+		err = pxy.slave.Add(slave.DSN(), db, slave.Weight)
+		if err != nil {
+			return pxy, err
+		}
 	}
-
-	// sort slaves by weight from highest to lowest
-	sort.Slice(pxy.Slaves, func(i, j int) bool { return pxy.Slaves[i].weight < pxy.Slaves[j].weight })
 
 	return pxy, nil
 }
@@ -102,18 +96,24 @@ func openDB(driver string, cfg conf.Schema) (*sql.DB, error) {
 
 // Shutdown close all available databases connect
 func (p *Proxy) Shutdown() {
-	p.Master.Close()
-	for _, slave := range p.Slaves {
-		slave.db.Close()
-	}
+	p.mtx.Lock()
 
+	// close all db instants connect
+	p.master.Close()
+	p.slave.Close(func(db interface{}) error {
+		return db.(*sql.DB).Close()
+	})
+
+	p.mtx.Unlock()
 	return
 }
 
-func (p *Proxy) getSlave() *sql.DB {
-	if len(p.Slaves) == 1 {
-		return p.Slaves[0].db
-	}
+// GetMaster return master instance database
+func (p *Proxy) GetMaster() *sql.DB {
+	return p.master
+}
 
-	return p.Slaves[0].db // TODO: get slave databases random
+// GetSlave return slave instance database
+func (p *Proxy) GetSlave() *sql.DB {
+	return p.slave.Next().(*sql.DB)
 }

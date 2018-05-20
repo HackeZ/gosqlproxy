@@ -2,7 +2,7 @@ package proxy
 
 // Exec insert/update/delete in master databases
 func (p *Proxy) Exec(sql string, args ...interface{}) (affected, lastID int64, err error) {
-	db := p.Master
+	db := p.GetMaster()
 
 	stmt, err := db.Prepare(sql)
 	if err != nil {

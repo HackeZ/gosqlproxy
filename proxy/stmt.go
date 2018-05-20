@@ -7,7 +7,7 @@ import (
 // Prepare sending raw SQL first and passing args only
 // must close stmt manually after using Prepare DB connection
 func (p *Proxy) Prepare(sql string) (stmt *sql.Stmt, err error) {
-	db := p.Master
+	db := p.GetMaster()
 
 	return db.Prepare(sql)
 }

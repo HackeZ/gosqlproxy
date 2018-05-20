@@ -18,8 +18,8 @@ type Schema struct {
 	DBName   string `json:"db_name"`
 	Params   string `json:"params"`
 
-	PacemakerSecond int32 `json:"pacemaker_second"`
-	Weight          int32 `json:"weight"` // TODO: plant to achieve
+	PacemakerSecond int   `json:"pacemaker_second"`
+	Weight          int   `json:"weight"`
 	PoolSize        int32 `json:"pool_size"`
 }
 
